@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>シンプルオセロゲーム</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    text-align: center;
+    margin: 20px;
+    background-color: #2d6a4f;
+    color: white;
+  }
+  #board {
+    margin: 20px auto;
+    display: grid;
+    grid-template-columns: repeat(8, 50px);
+    grid-template-rows: repeat(8, 50px);
+    gap: 2px;
+    width: 416px;
+    background-color: #1b4332;
+    border: 3px solid #14532d;
+  }
+  .cell {
+    width: 50px;
+    height: 50px;
+    background-color: #52b788;
+    border-radius: 6px;
+    cursor: pointer;
+    position: relative;
+  }
+  .cell:hover {
+    background-color: #74c69d;
+  }
+  .piece {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin: 5px auto;
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+  }
+  .black {
+    background-color: black;
+  }
+  .white {
+    background-color: white;
+  }
+  #status {
+    margin-top: 20px;
+    font-size: 1.2rem;
+  }
+  #restart {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #40916c;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  #restart:hover {
+    background-color: #2d6a4f;
+  }
+</style>
+</head>
+<body>
+
+<h1>シンプルオセロゲーム</h1>
+<div id="board"></div>
+<div id="status">黒のターンです</div>
+<button id="restart">リセット</button>
+
+<script>
+  const boardSize = 8;
+  const boardEl = document.getElementById('board');
+  const statusEl = document.getElementById('status');
+  const restartBtn = document.getElementById('restart');
+
+  // 盤面の状態を2次元配列で管理。0:空き, 1:黒, 2:白
+  let board = [];
+  let currentPlayer = 1; // 1:黒, 2:白
+
+  // 方向ベクトル（8方向）
+  const directions = [
+    [-1, -1], [-1, 0], [-1, 1],
+    [ 0, -1],          [ 0, 1],
+    [ 1, -1], [ 1, 0], [ 1, 1]
+  ];
+
+  // 盤面初期化
+  function initBoard() {
+    board = Array.from({ length: boardSize }, () => Array(boardSize).fill(0));
+    // 初期配置
+    board[3][3] = 2;
+    board[3][4] = 1;
+    board[4][3] = 1;
+    board[4][4] = 2;
+  }
+
+  // 盤面描画
+  function renderBoard() {
+    boardEl.innerHTML = '';
+    for(let y=0; y<boardSize; y++) {
+      for(let x=0; x<boardSize; x++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.dataset.x = x;
+        cell.dataset.y = y;
+
+        if(board[y][x] !== 0) {
+          const piece = document.createElement('div');
+          piece.classList.add('piece');
+          piece.classList.add(board[y][x] === 1 ? 'black' : 'white');
+          cell.appendChild(piece);
+        }
+
+        cell.addEventListener('click', () => handleCellClick(x, y));
+        boardEl.appendChild(cell);
+      }
+    }
+  }
+
+  // クリックしたセルに置けるか判定
+  function canPlace(x, y, player) {
+    if(board[y][x] !== 0) return false;
+
+    for(const dir of directions) {
+      let nx = x + dir[0];
+      let ny = y + dir[1];
+      let hasOpponentBetween = false;
+
+      while(nx >= 0 && nx < boardSize && ny >= 0 && ny < boardSize) {
+        if(board[ny][nx] === 0) break;
+        if(board[ny][nx] === player) {
+          if(hasOpponentBetween) return true;
+          else break;
+        } else {
+          hasOpponentBetween = true;
+        }
+        nx += dir[0];
+        ny += dir[1];
+      }
+    }
+    return false;
+  }
+
+  // 指定座標に石を置き、裏返す処理
+  function placePiece(x, y, player) {
+    board[y][x] = player;
+
+    for(const dir of directions) {
+      let nx = x + dir[0];
+      let ny = y + dir[1];
+      let piecesToFlip = [];
+
+      while(nx >= 0 && nx < boardSize && ny >= 0 && ny < boardSize) {
+        if(board[ny][nx] === 0) {
+          piecesToFlip = [];
+          break;
+        }
+        if(board[ny][nx] === player) {
+          break;
+        } else {
+          piecesToFlip.push([nx, ny]);
+        }
+        nx += dir[0];
+        ny += dir[1];
+      }
+
+      // 最後に自分の石がある場合だけ裏返す
+      if(nx >= 0 && nx < boardSize && ny >= 0 && ny < boardSize && board[ny][nx] === player) {
+        for(const [fx, fy] of piecesToFlip) {
+          board[fy][fx] = player;
+        }
+      }
+    }
+  }
+
+  // 指定プレイヤーが置ける場所があるか
+  function hasValidMoves(player) {
+    for(let y=0; y<boardSize; y++) {
+      for(let x=0; x<boardSize; x++) {
+        if(canPlace(x, y, player)) return true;
+      }
+    }
+    return false;
+  }
+
+  // スコア計算
+  function calculateScore() {
+    let black = 0, white = 0;
+    for(let y=0; y<boardSize; y++) {
+      for(let x=0; x<boardSize; x++) {
+        if(board[y][x] === 1) black++;
+        else if(board[y][x] === 2) white++;
+      }
+    }
+    return { black, white };
+  }
+
+  // ゲーム終了判定
+  function isGameOver() {
+    return !hasValidMoves(1) && !hasValidMoves(2);
+  }
+
+  // ターン切り替え
+  function switchPlayer() {
+    currentPlayer = currentPlayer === 1 ? 2 : 1;
+  }
+
+  // セルクリック時の処理
+  function handleCellClick(x, y) {
+    if(!canPlace(x, y, currentPlayer)) return;
+
+    placePiece(x, y, currentPlayer);
+    renderBoard();
+
+    if(isGameOver()) {
+      const score = calculateScore();
+      let msg = `ゲーム終了！黒: ${score.black} 白: ${score.white}  `;
+      if(score.black > score.white) msg += '黒の勝ち！';
+      else if(score.white > score.black) msg += '白の勝ち！';
+      else msg += '引き分け！';
+      statusEl.textContent = msg;
+      return;
+    }
+
+    switchPlayer();
+
+    if(!hasValidMoves(currentPlayer)) {
+      statusEl.textContent = `${currentPlayer === 1 ? '黒' : '白'} は置ける場所がありません。パスします。`;
+      switchPlayer();
+      if(!hasValidMoves(currentPlayer)) {
+        // 両者置けない場合はゲーム終了
+        const score = calculateScore();
+        let msg = `ゲーム終了！黒: ${score.black} 白: ${score.white}  `;
+        if(score.black > score.white) msg += '黒の勝ち！';
+        else if(score.white > score.black) msg += '白の勝ち！';
+        else msg += '引き分け！';
+        statusEl.textContent = msg;
+        return;
+      }
+    }
+
+    statusEl.textContent = `${currentPlayer === 1 ? '黒' : '白'} のターンです`;
+  }
+
+  // リセットボタン
+  restartBtn.addEventListener('click', () => {
+    initBoard();
+    currentPlayer = 1;
+    statusEl.textContent = '黒のターンです';
+    renderBoard();
+  });
+
+  // 初期化実行
+  initBoard();
+  renderBoard();
+
+</script>
+
+</body>
+</html>
