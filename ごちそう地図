@@ -1,0 +1,139 @@
+/**
+ * Webマルシェ「ごちそう地図」コアロジック
+ * ユーザーの位置と旬の月に基づき、周辺の食材を検索する関数
+ */
+
+// 商品データベース (DBのシミュレーション)
+// 緯度経度は東京駅周辺と千葉、埼玉あたりを想定
+const productDatabase = [
+    {
+        id: 101,
+        name: '千葉県産 新鮮な落花生',
+        producer: 'A農園',
+        lat: 35.63, // 緯度 (千葉寄り)
+        lng: 140.10, // 経度
+        price: 800,
+        availableStock: 50,
+        shunMonths: [9, 10, 11] // 旬は9月〜11月
+    },
+    {
+        id: 102,
+        name: '豊洲直送 鮮魚セット',
+        producer: 'B漁師',
+        lat: 35.66, // 東京湾岸
+        lng: 139.78,
+        price: 3500,
+        availableStock: 15,
+        shunMonths: [1, 2, 12] // 旬は冬の魚を想定
+    },
+    {
+        id: 103,
+        name: '埼玉県産 採れたて里芋',
+        producer: 'C農家',
+        lat: 35.85, // 埼玉寄り
+        lng: 139.63,
+        price: 500,
+        availableStock: 100,
+        shunMonths: [9, 10, 11] // 旬は秋
+    },
+    {
+        id: 104,
+        name: '高級黒毛和牛 ステーキ肉',
+        producer: 'D牧場',
+        lat: 35.70, // 都心寄り
+        lng: 139.75,
+        price: 6000,
+        availableStock: 5,
+        shunMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] // 通年
+    }
+];
+
+// 地理的な距離を計算するヘルパー関数 (ヒュベニの公式は複雑なので、ここではシンプルな距離判定をシミュレーション)
+/**
+ * 2つの緯度・経度から距離の近さをシミュレート
+ * @param {number} lat1 - 1点目の緯度
+ * @param {number} lng1 - 1点目の経度
+ * @param {number} lat2 - 2点目の緯度
+ * @param {number} lng2 - 2点目の経度
+ * @returns {number} - 簡易的な距離スコア (小さいほど近い)
+ */
+function calculateDistanceScore(lat1, lng1, lat2, lng2) {
+    // 緯度・経度の差の二乗和で簡易的に距離を表現
+    return Math.sqrt(Math.pow(lat1 - lat2, 2) + Math.pow(lng1 - lng2, 2));
+}
+
+/**
+ * 商品を検索・絞り込むメイン関数
+ * @param {number} userLat - ユーザーの現在地の緯度
+ * @param {number} userLng - ユーザーの現在地の経度
+ * @param {number} currentMonth - 現在の月 (1〜12)
+ * @param {number} maxDistanceScore - 最大距離スコア (小さいほど近くに限定)
+ * @returns {object[]} - 絞り込まれた商品リスト
+ */
+function searchProducts(userLat, userLng, currentMonth, maxDistanceScore) {
+    const results = [];
+
+    for (const product of productDatabase) {
+        // 1. 在庫チェック
+        if (product.availableStock <= 0) {
+            continue;
+        }
+
+        // 2. 地理的距離チェック
+        const distanceScore = calculateDistanceScore(userLat, userLng, product.lat, product.lng);
+        if (distanceScore > maxDistanceScore) {
+            continue; // 遠すぎる商品は除外
+        }
+
+        // 3. 旬のチェック
+        const isShun = product.shunMonths.includes(currentMonth);
+
+        // 4. 結果に追加
+        results.push({
+            id: product.id,
+            name: product.name,
+            producer: product.producer,
+            price: product.price,
+            distance: distanceScore.toFixed(4), // 距離スコア
+            isShun: isShun ? '【旬！】' : '',
+            // 緯度経度をフロントエンドに渡して地図上に表示させる
+            location: { lat: product.lat, lng: product.lng } 
+        });
+    }
+    
+    // 距離が近い順にソート（地図の近さと、旬かどうかを重視して表示）
+    return results.sort((a, b) => {
+        // 旬の商品を優先（旬でない商品の距離スコアを少し重くする）
+        const scoreA = a.isShun ? a.distance : parseFloat(a.distance) * 1.5;
+        const scoreB = b.isShun ? b.distance : parseFloat(b.distance) * 1.5;
+        return scoreA - scoreB;
+    });
+}
+
+// --- 実行例 ---
+// ユーザーは東京駅付近にいると想定 (緯度: 35.68, 経度: 139.76)
+const userLocation = { lat: 35.68, lng: 139.76 };
+const currentMonth = 10; // 10月（秋を想定）
+const searchRadiusScore = 0.2; // 検索範囲の制限
+
+console.log(`--- ユーザーの位置 (東京駅付近) ---`);
+console.log(`--- 検索月: ${currentMonth}月 (秋) ---`);
+console.log('--- AIによる商品提案 (距離が近く、旬なものを優先) ---');
+
+const suggestedProducts = searchProducts(
+    userLocation.lat,
+    userLocation.lng,
+    currentMonth,
+    searchRadiusScore
+);
+
+if (suggestedProducts.length > 0) {
+    suggestedProducts.forEach((product, index) => {
+        console.log(`\n${index + 1}. ${product.isShun} ${product.name}`);
+        console.log(`   - 生産者: ${product.producer}`);
+        console.log(`   - 価格: ${product.price}円`);
+        console.log(`   - 近さスコア: ${product.distance}`);
+    });
+} else {
+    console.log('\n申し訳ありません。ご希望の条件で提案できる商品がありませんでした。');
+}
